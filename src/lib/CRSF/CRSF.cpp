@@ -36,6 +36,7 @@ void (*CRSF::disconnected)() = &nullCallback; // called when CRSF stream is lost
 void (*CRSF::connected)() = &nullCallback;    // called when CRSF stream is regained
 
 void (*CRSF::RecvParameterUpdate)() = &nullCallback; // called when recv parameter update req, ie from LUA
+void (*CRSF::RCdataCallback)() = &nullCallback; // called when there is new RC data
 
 /// UART Handling ///
 uint32_t CRSF::GoodPktsCountResult = 0;
@@ -66,6 +67,7 @@ volatile uint32_t CRSF::OpenTXsyncLastSent = 0;
 uint32_t CRSF::RequestedRCpacketInterval = 5000; // default to 200hz as per 'normal'
 volatile uint32_t CRSF::RCdataLastRecv = 0;
 volatile int32_t CRSF::OpenTXsyncOffset = 0;
+bool CRSF::OpentxSyncActive = true;
 #ifdef FEATURE_OPENTX_SYNC_AUTOTUNE
 #define AutoSyncWaitPeriod 2000
 uint32_t CRSF::OpenTXsyncOffsetSafeMargin = 1000;
@@ -357,6 +359,15 @@ void ICACHE_RAM_ATTR CRSF::JustSentRFpacket()
     // Serial.println(CRSF::OpenTXsyncOffsetSafeMargin / 10);
 }
 
+void CRSF::disableOpentxSync()
+{
+    OpentxSyncActive = false;
+}
+
+void CRSF::enableOpentxSync()
+{
+    OpentxSyncActive = true;
+}
 
 void ICACHE_RAM_ATTR CRSF::sendSyncPacketToTX() // in values in us.
 {
@@ -634,6 +645,7 @@ void ICACHE_RAM_ATTR CRSF::handleUARTin()
                     {
                         //delayMicroseconds(50);
                         handleUARTout();
+                        RCdataCallback();
                     }
                 }
                 else
@@ -653,7 +665,10 @@ void ICACHE_RAM_ATTR CRSF::handleUARTin()
 
 void ICACHE_RAM_ATTR CRSF::handleUARTout()
 {
-    sendSyncPacketToTX(); // calculate mixer sync packet if needed
+    if (OpentxSyncActive)
+    {
+        sendSyncPacketToTX(); // calculate mixer sync packet if needed
+    }
 
     uint8_t peekVal = SerialOutFIFO.peek(); // check if we have data in the output FIFO that needs to be written
     if (peekVal > 0)
